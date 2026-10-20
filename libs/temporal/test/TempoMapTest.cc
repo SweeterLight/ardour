@@ -31,8 +31,7 @@ TempoMapTest::addTest()
 
 	CPPUNIT_ASSERT (tp.beats() == Beats (17,0));
 
-
-	tmap->abort_update ();
+	// This standalone map did not acquire the global write_copy() lock.
 }
 
 void

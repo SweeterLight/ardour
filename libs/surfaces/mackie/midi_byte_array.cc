@@ -20,6 +20,7 @@
 #include "midi_byte_array.h"
 
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <sstream>
 #include <vector>

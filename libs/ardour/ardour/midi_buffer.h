@@ -203,7 +203,7 @@ private:
 	friend class iterator_base< const MidiBuffer, const Evoral::Event<TimeType> >;
 
 	static size_t align32 (size_t s) {
-#if defined(__arm__) || defined(__aarch64__)
+#if defined(__arm__) || defined(__aarch64__) || defined(_M_ARM64)
 		return ((s - 1) | 3) + 1;
 #else
 		return s;

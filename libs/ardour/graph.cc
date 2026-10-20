@@ -148,6 +148,9 @@ Graph::n_threads () const
 void
 Graph::session_going_away ()
 {
+	/* Routes can retain a Graph after its Session closes.  Do not let that
+	 * retired Graph recreate backend threads when the next Session starts. */
+	engine_connections.drop_connections ();
 	drop_threads ();
 
 	/* now drop all references on the nodes. */

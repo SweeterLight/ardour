@@ -21,6 +21,7 @@
 
 #include <boost/type_traits/aligned_storage.hpp>
 #include <limits>
+#include <memory>
 
 #include "pbd/libpbd_visibility.h"
 
@@ -37,6 +38,15 @@
 
 namespace PBD {
 
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 230000
+/* libc++ 23 copies the allocator into vector's relocation buffer. Inline
+ * storage cannot survive that temporary, so use the standard allocator as
+ * the existing MSVC container paths do. Copies must own interchangeable
+ * storage; the legacy inline allocator does not meet that requirement.
+ */
+template <class T, std::size_t stack_capacity>
+using StackAllocator = std::allocator<T>;
+#else
 template <class T, std::size_t stack_capacity>
 class /*LIBPBD_API*/ StackAllocator
 {
@@ -161,6 +171,7 @@ private:
 	align_t _buf;
 	pointer _ptr;
 };
+#endif
 
 } // namespace PBD
 

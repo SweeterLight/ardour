@@ -27,8 +27,8 @@
 #include <stdint.h>
 #include <assert.h>
 
-#ifdef ARM_NEON_SUPPORT
-/* Needed for ARM NEON detection */
+#if defined(ARM_NEON_SUPPORT) && defined(__linux__)
+/* Needed for optional ARM NEON detection on Linux. */
 #include <sys/auxv.h>
 #include <asm/hwcap.h>
 #endif
@@ -163,10 +163,10 @@ FPU::FPU ()
 	}
 
 #ifdef ARM_NEON_SUPPORT
-# ifdef __aarch64__
+# if defined(__aarch64__) || defined(_M_ARM64)
 	/* all armv8+ features NEON used in arm_neon_functions.cc */
 	_flags = Flags(_flags | HasNEON);
-# elif defined __arm__
+# elif defined(__arm__) && defined(__linux__)
 	if (getauxval(AT_HWCAP) & HWCAP_NEON) {
 		_flags = Flags(_flags | HasNEON);
 	}

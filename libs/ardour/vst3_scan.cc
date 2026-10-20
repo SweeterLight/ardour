@@ -289,7 +289,9 @@ static std::string vst3_bindir () {
 #ifdef __APPLE__
 	return "MacOS";
 #elif defined PLATFORM_WINDOWS
-# if defined __x86_64__ || defined _M_X64
+# if defined(__aarch64__) || defined(_M_ARM64)
+	return "arm64-win";
+# elif defined __x86_64__ || defined _M_X64
 	return "x86_64-win";
 # else
 	return "x86-win";
@@ -357,7 +359,7 @@ ARDOUR::module_path_vst3 (string const& path)
 		std::string p1 = Glib::path_get_dirname (path);
 		std::string p2 = Glib::path_get_dirname (p1);
 		std::string p3 = Glib::path_get_dirname (p2);
-		if (  (Glib::path_get_basename (p1) == "x86_64-win" || Glib::path_get_basename (p1) == "x86-win")
+		if (  (Glib::path_get_basename (p1) == "x86_64-win" || Glib::path_get_basename (p1) == "x86-win" || Glib::path_get_basename (p1) == "arm64-win" || Glib::path_get_basename (p1) == "arm64x-win")
 		    && Glib::path_get_basename (p2) == "Contents"
 		    && Glib::path_get_basename (p3) == Glib::path_get_basename (path)
 		   ) {
@@ -464,7 +466,7 @@ ARDOUR::vst3_valid_cache_file (std::string const& module_path, bool verbose, boo
 	GStatBuf sb_v3i;
 
 	if (g_stat (module_path.c_str(), &sb_vst) == 0 && g_stat (cache_file.c_str (), &sb_v3i) == 0) {
-		if (sb_vst.st_mtime < sb_v3i.st_mtime) {
+		if (sb_vst.st_mtime <= sb_v3i.st_mtime) {
 			/* plugin is older than cache file */
 			if (verbose) {
 				PBD::info << "Cache file timestamp is valid." << endmsg;

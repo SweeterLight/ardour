@@ -19,6 +19,8 @@
 #pragma once
 
 #include <shared_mutex>
+#include <condition_variable>
+#include <mutex>
 
 #include "pbd/libpbd_visibility.h"
 
@@ -70,7 +72,54 @@ private:
 	RWLock (const RWLock&)            = delete;
 	RWLock& operator= (const RWLock&) = delete;
 
+#if defined(PLATFORM_WINDOWS) && defined(_LIBCPP_VERSION)
+	/* Ardour permits additional read locks while a writer waits (including
+	 * nested reads). libc++'s Windows shared_mutex blocks those readers,
+	 * deadlocking that sequence. Preserve the reader-priority contract.
+	 */
+	class ReaderPreferredLock {
+	public:
+		void lock_shared () {
+			std::unique_lock<std::mutex> lock (_mutex);
+			_changed.wait (lock, [this] { return !_writer; });
+			++_readers;
+		}
+		bool try_lock_shared () {
+			std::unique_lock<std::mutex> lock (_mutex, std::try_to_lock);
+			if (!lock.owns_lock () || _writer) { return false; }
+			++_readers;
+			return true;
+		}
+		void unlock_shared () {
+			std::lock_guard<std::mutex> lock (_mutex);
+			if (--_readers == 0) { _changed.notify_all (); }
+		}
+		void lock () {
+			std::unique_lock<std::mutex> lock (_mutex);
+			_changed.wait (lock, [this] { return !_writer && _readers == 0; });
+			_writer = true;
+		}
+		bool try_lock () {
+			std::unique_lock<std::mutex> lock (_mutex, std::try_to_lock);
+			if (!lock.owns_lock () || _writer || _readers) { return false; }
+			_writer = true;
+			return true;
+		}
+		void unlock () {
+			std::lock_guard<std::mutex> lock (_mutex);
+			_writer = false;
+			_changed.notify_all ();
+		}
+	private:
+		std::mutex _mutex;
+		std::condition_variable _changed;
+		unsigned _readers = 0;
+		bool _writer = false;
+	};
+	ReaderPreferredLock _rw_lock;
+#else
 	std::shared_mutex _rw_lock;
+#endif
 };
 
 class LIBPBD_API RWLock::ReaderLock

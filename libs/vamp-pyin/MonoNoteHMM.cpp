@@ -106,9 +106,11 @@ MonoNoteHMM::build()
     //    ...
 
     // observation distributions
+    // Allocate once: growing vector<normal> triggers an ambiguous ADL swap
+    // between recent Boost.Math and libc++ implementations.
+    pitchDistr = vector<boost::math::normal>(par.n, boost::math::normal(0,1));
     for (size_t iState = 0; iState < par.n; ++iState)
     {
-        pitchDistr.push_back(boost::math::normal(0,1));
         if (iState % par.nSPP == 2)
         {
             // silent state starts tracking

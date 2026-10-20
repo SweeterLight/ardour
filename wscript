@@ -439,6 +439,9 @@ def set_compiler_flags (conf,opt):
 
     u = PLATFORM.uname ()
     cpu = u[4]
+    # CPU features follow the compiler target, not the machine running Waf.
+    if conf.env['WINDOWS_ARCH']:
+        cpu = {'arm64': 'aarch64', 'x64': 'x86_64', 'x86': 'i686'}[conf.env['WINDOWS_ARCH']]
     platform = u[0].lower()
     version = u[2]
 
@@ -544,7 +547,7 @@ int main() { return 0; }''',
         conf.env['build_target'] = opt.dist_target
 
     if not opt.no_fpu_optimization:
-        if conf.env['build_target'] == 'armhf' or conf.env['build_target'] == 'aarch64':
+        if conf.env['build_target'] in ('armhf', 'aarch64') or conf.env['WINDOWS_ARCH'] == 'arm64':
             conf.define('ARM_NEON_SUPPORT', 1)
         elif conf.env['build_target'] == 'mingw':
             if re.search ('x86_64-w64', str(conf.env['CC'])) is not None:
@@ -665,7 +668,7 @@ int main() { return 0; }''',
             # of the compiler.
             if re.search ('x86_64-w64', str(conf.env['CC'])) is not None:
                     compiler_flags.append ("-DBUILD_SSE_OPTIMIZATIONS")
-        if not build_host_supports_sse:
+        if re.search('(i[0-9]86|x86_64|AMD64)', cpu) and not build_host_supports_sse:
             print("\nWarning: you are building Ardour with SSE support even though your system does not support these instructions. (This may not be an error, especially if you are a package maintainer)")
 
     # end optimization section
@@ -857,6 +860,8 @@ def options(opt):
                     help='Directory/folder where dependency stack trees (gtk, a3) can be found (defaults to ~)')
     opt.add_option('--dist-target', type='string', default='auto', dest='dist_target',
                     help='Specify the target for cross-compiling [auto,none,x86,i386,i686,x86_64,tiger,leopard,mingw,msvc]')
+    opt.add_option('--windows-arch', type='choice', choices=['auto', 'x86', 'x64', 'arm64'],
+                   default='auto', help='Windows compiler target architecture (default: detect from compiler)')
     opt.add_option('--no-dr-mingw', action='store_true', default=False, dest='no_drmingw',
                     help='Do not write crashdumps using Dr.Mingw (Windows ONLY)')
     opt.add_option('--no-fpu-optimization', action='store_true', default=False, dest='no_fpu_optimization',
@@ -977,6 +982,8 @@ def configure(conf):
         conf.load('msvc')
         conf.find_program('llvm-nm', var = 'llvm_nm')
         conf.load('gendef', tooldir = 'tools')
+
+    conf.load('windows_arch', tooldir='tools')
 
     if Options.options.debug and not Options.options.keepflags:
         # Nuke user CFLAGS/CXXFLAGS if debug is set (they likely contain -O3, NDEBUG, etc)
@@ -1227,7 +1234,8 @@ int main () { int x = SFC_RF64_AUTO_DOWNGRADE; return 0; }
         conf.env.append_value('CFLAGS', "-DHAVE_RF64_RIFF")
 
     if Options.options.dist_target == 'mingw':
-        Options.options.no_fpu_optimization = False
+        if conf.env['WINDOWS_ARCH'] != 'arm64':
+            Options.options.no_fpu_optimization = False
         conf.env.append_value('CFLAGS', '-DPLATFORM_WINDOWS')
         conf.env.append_value('CFLAGS', '-DCOMPILER_MINGW')
         conf.env.append_value('CXXFLAGS', '-DPLATFORM_WINDOWS')
@@ -1273,10 +1281,12 @@ int main () { return 0; }
         #    conf.env.append_value('CFLAGS', '-DUSE_PTW32_SEMAPHORE')
         #    conf.env.append_value('CXXFLAGS', '-DUSE_PTW32_SEMAPHORE')
 
+        # Clang's MinGW target uses native TLS without a GCC configure string.
+        # Access exported TLS through the library's out-of-line accessors.
         # Check if GCC was built with native TLS support
         # gcc -v prints configure flags to stderr, not stdout
         gcc_config = subprocess.run([str(conf.env['CC'][0]), '-v'], capture_output=True, text=True).stderr
-        have_native_tls = '--enable-tls' in gcc_config
+        have_native_tls = conf.env['CC_NAME'] == 'clang' or '--enable-tls' in gcc_config
 
         if have_native_tls:
             conf.env.append_value('CFLAGS', '-DMINGW_NATIVE_TLS')
@@ -1542,6 +1552,7 @@ const char* const ardour_config_info = "\\n\\
     write_config_text('Aubio',                 conf.is_defined('HAVE_AUBIO'))
     write_config_text('AudioUnits',            conf.is_defined('AUDIOUNIT_SUPPORT'))
     write_config_text('Build target',          conf.env['build_target'])
+    write_config_text('Windows architecture',  conf.env['WINDOWS_ARCH'])
     write_config_text('Canvas Test UI',        conf.is_defined('CANVASTESTUI'))
     write_config_text('Beatbox test app',      conf.is_defined('BEATBOX'))
     write_config_text('CoreAudio',             conf.is_defined('HAVE_COREAUDIO'))

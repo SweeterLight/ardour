@@ -48,6 +48,15 @@ using namespace PBD;
 
 namespace ARDOUR {
 
+#ifdef PLATFORM_WINDOWS
+static std::string
+bundled_video_tool (char const* name)
+{
+	std::string path = Glib::build_filename (windows_package_directory_path (), "bin", name);
+	return Glib::file_test (path, Glib::FILE_TEST_IS_REGULAR) ? path : std::string ();
+}
+#endif
+
 bool
 ArdourVideoToolPaths::harvid_exe (std::string &harvid_exe)
 {
@@ -58,6 +67,12 @@ ArdourVideoToolPaths::harvid_exe (std::string &harvid_exe)
 #endif
 
 	harvid_exe = "";
+#ifdef PLATFORM_WINDOWS
+	harvid_exe = bundled_video_tool ("harvid.exe");
+	if (!harvid_exe.empty ()) {
+		return true;
+	}
+#endif
 
 	std::string icsd_file_path;
 	if (find_file (PBD::Searchpath(Glib::getenv("PATH")), X_("harvid"), icsd_file_path)) {
@@ -110,6 +125,10 @@ ArdourVideoToolPaths::xjadeo_exe (std::string &xjadeo_exe)
 	} else if (!Config->get_xjadeo_binary().empty()
 			&& Glib::file_test (Config->get_xjadeo_binary(), Glib::FILE_TEST_EXISTS|Glib::FILE_TEST_IS_EXECUTABLE)) {
 		xjadeo_exe = Config->get_xjadeo_binary();
+#ifdef PLATFORM_WINDOWS
+	} else if (!(xjadeo_file_path = bundled_video_tool ("xjadeo.exe")).empty ()) {
+		xjadeo_exe = xjadeo_file_path;
+#endif
 	} else if (find_file (Searchpath(Glib::getenv("PATH")), X_("xjremote"), xjadeo_file_path)) {
 		xjadeo_exe = xjadeo_file_path;
 	} else if (find_file (Searchpath(Glib::getenv("PATH")), X_("xjadeo"), xjadeo_file_path)) {
@@ -173,6 +192,17 @@ ArdourVideoToolPaths::transcoder_exe (std::string &ffmpeg_exe, std::string &ffpr
 
 	_ffmpeg_exe = X_("");
 	_ffprobe_exe = X_("");
+
+#ifdef PLATFORM_WINDOWS
+	_ffmpeg_exe = bundled_video_tool ("ffmpeg.exe");
+	_ffprobe_exe = bundled_video_tool ("ffprobe.exe");
+	if (!_ffmpeg_exe.empty () && !_ffprobe_exe.empty ()) {
+		_cached = _success = true;
+		ffmpeg_exe = _ffmpeg_exe;
+		ffprobe_exe = _ffprobe_exe;
+		return true;
+	}
+#endif
 
 	std::string ff_file_path;
 	if (find_file (Searchpath(Glib::getenv("PATH")), X_("ffmpeg_harvid"), ff_file_path)) {

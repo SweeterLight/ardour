@@ -62,6 +62,15 @@ fixup_bundle_environment (int, char* [], string & localedir)
 	// Unset GTK2_RC_FILES so that only ardour specific files are loaded
 	Glib::unsetenv ("GTK2_RC_FILES");
 
+	/* Child scanners and loadable modules need the bundled runtime DLLs,
+	 * independently of the working directory or an MSYS2 installation. */
+	std::string bundle_bin = Glib::build_filename (windows_package_directory_path (), "bin");
+	Glib::setenv ("PATH", bundle_bin + G_SEARCHPATH_SEPARATOR_S + Glib::getenv ("PATH"), true);
+	std::string fontconfig = Glib::build_filename (windows_package_directory_path (), "etc", "fonts", "fonts.conf");
+	if (Glib::file_test (fontconfig, Glib::FILE_TEST_IS_REGULAR)) {
+		Glib::setenv ("FONTCONFIG_FILE", fontconfig, true);
+	}
+
 	std::string path;
 
 	if (ARDOUR::translations_are_enabled ()) {
@@ -97,7 +106,7 @@ fixup_bundle_environment (int, char* [], string & localedir)
 	 * because neither nsmd nor the GUI is currently available for windows.
 	 * furthermore it'll be even less common for derived products.
 	 */
-	Glib::setenv ("ARDOUR_SELF", Glib::build_filename(ardour_dll_directory(), "ardour.exe"), true);
+	Glib::setenv ("ARDOUR_SELF", Glib::build_filename(bundle_bin, "Ardour.exe"), true);
 
 	/* https://docs.microsoft.com/en-us/windows/win32/api/shellscalingapi/nf-shellscalingapi-setprocessdpiawareness */
 	HMODULE module = LoadLibraryA ("Shcore.dll");

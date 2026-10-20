@@ -341,7 +341,7 @@ FilesystemTest::testRemoveDirectory ()
 void
 FilesystemTest::testCanonicalPathASCII ()
 {
-	string top_dir = test_output_directory ("testCanonicalPathASCII");
+	string top_dir = PBD::canonical_path (test_output_directory ("testCanonicalPathASCII"));
 	PwdReset pwd_reset(top_dir);
 
 	string pwd = Glib::get_current_dir ();
@@ -373,7 +373,7 @@ FilesystemTest::testCanonicalPathASCII ()
 void
 FilesystemTest::testCanonicalPathUTF8 ()
 {
-	string top_dir = test_output_directory ("testCanonicalPathUTF8");
+	string top_dir = PBD::canonical_path (test_output_directory ("testCanonicalPathUTF8"));
 	PwdReset pwd_reset(top_dir);
 
 	string pwd = Glib::get_current_dir ();

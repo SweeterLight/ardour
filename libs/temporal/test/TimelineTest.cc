@@ -1,5 +1,5 @@
 #include <iostream>
-#include <stdlib.h>
+#include <random>
 
 #include "temporal/timeline.h"
 
@@ -15,19 +15,19 @@ TimelineTest::createTest()
 	using namespace Temporal;
 	using namespace std;
 
-	srandom (time (0));
+	std::mt19937 generate (0);
 
 	vector<timepos_t> times;
 
 	for (int n = 0; n < 32767; ++n) {
-		times.push_back (timepos_t (random() % 32120321));
+		times.push_back (timepos_t (int64_t (generate() % 32120321)));
 	}
 
 	uint32_t lessthan = 0;
 	uint32_t greaterthan = 0;
 
 	for (vector<timepos_t>::iterator t = times.begin(); t != times.end(); ++t) {
-		if ((*t) + timepos_t (random() % 20207) < timepos_t (2299307)) {
+		if ((*t) + timepos_t (int64_t (generate() % 20207)) < timepos_t (2299307)) {
 			lessthan++;
 		} else {
 			greaterthan++;

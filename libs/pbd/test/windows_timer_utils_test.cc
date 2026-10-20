@@ -1,6 +1,7 @@
 #include "windows_timer_utils_test.h"
 
 #include "pbd/windows_timer_utils.h"
+#include "pbd/microseconds.h"
 
 #include <windows.h>
 
@@ -14,16 +15,17 @@ void
 WindowsTimerUtilsTest::testQPC ()
 {
 	// performs basically the same test
-	CPPUNIT_ASSERT (PBD::QPC::check_timer_valid());
+	LARGE_INTEGER frequency;
+	CPPUNIT_ASSERT (QueryPerformanceFrequency (&frequency) && frequency.QuadPart > 0);
 
-	int64_t last_timer_val = PBD::QPC::get_microseconds ();
-	CPPUNIT_ASSERT (last_timer_val >= 0);
+	int64_t last_timer_val = PBD::get_microseconds ();
+	CPPUNIT_ASSERT (last_timer_val > 0);
 
 	int64_t min_interval = 1000000;
 	int64_t max_interval = 0;
 
 	for (int i = 0; i < 10000; ++i) {
-		int64_t timer_val = PBD::QPC::get_microseconds ();
+		int64_t timer_val = PBD::get_microseconds ();
 		CPPUNIT_ASSERT (timer_val >= 0);
 		// try and test for non-syncronized TSC(AMD K8/etc)
 		CPPUNIT_ASSERT (timer_val >= last_timer_val);
@@ -124,6 +126,23 @@ test_sleep_granularity (const std::string& test_name, uint32_t& sleep_avg_elapse
 void
 WindowsTimerUtilsTest::testMMTimers ()
 {
+#ifdef PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+	/* Windows 11 may ignore timer requests for a hidden, inaudible process.
+	 * This console test must opt out before measuring timeBeginPeriod.
+	 * https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-setprocessinformation
+	 */
+	typedef BOOL (WINAPI *SetProcessInfo) (HANDLE, PROCESS_INFORMATION_CLASS, LPVOID, DWORD);
+	SetProcessInfo set_process_info = reinterpret_cast<SetProcessInfo> (
+		GetProcAddress (GetModuleHandleA ("kernel32.dll"), "SetProcessInformation"));
+	if (set_process_info) {
+		PROCESS_POWER_THROTTLING_STATE state = {PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+			PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION, 0};
+		if (!set_process_info (GetCurrentProcess (), ProcessPowerThrottling, &state, sizeof (state))) {
+			// Older Windows versions do not recognize this policy flag.
+			CPPUNIT_ASSERT (GetLastError () == ERROR_INVALID_PARAMETER);
+		}
+	}
+#endif
 	uint32_t min_timer_res = 0;
 	CPPUNIT_ASSERT (PBD::MMTIMERS::get_min_resolution (min_timer_res));
 	CPPUNIT_ASSERT (min_timer_res == 1);

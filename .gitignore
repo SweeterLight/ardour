@@ -152,3 +152,7 @@ waf3-*
 
 # misc custom files git should ignore
 /local
+
+# Workspace-local Windows ARM64 toolchain and packages
+/.build/
+/dist/

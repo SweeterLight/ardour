@@ -39,7 +39,7 @@
 #if defined (_WIN32)
 	//-----------------------------------------------------------------------------
 	// ARM32 AND ARM64 (WINDOWS)
-	#if (defined(_M_ARM64) || defined(_M_ARM))
+	#if (defined(_M_ARM64) || defined(_M_ARM) || defined(__aarch64__) || defined(__arm__))
 		#define SMTG_OS_WINDOWS_ARM	1
 	#endif
 

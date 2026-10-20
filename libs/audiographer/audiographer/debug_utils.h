@@ -5,6 +5,7 @@
 
 #include <cstdlib>
 #include <string>
+#include <typeinfo>
 
 #ifdef __GNUC__
 #include <cxxabi.h>

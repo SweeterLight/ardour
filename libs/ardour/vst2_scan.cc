@@ -573,7 +573,9 @@ ARDOUR::vst2_cache_file (std::string const& path)
 	 * start 32bit Ardour, scan 32bit plugin -> create cache file.
 	 * start 64bit Ardour, scan 32bit plugin -> invalid -> cleanup -> cache file is removed
 	 */
-# if ( defined(__x86_64__) || defined(_M_X64) )
+# if ( defined(__aarch64__) || defined(_M_ARM64) )
+	return Glib::build_filename (vst2_info_cache_dir (), std::string (hash) + std::string ("-arm64.v2i"));
+# elif ( defined(__x86_64__) || defined(_M_X64) )
 	return Glib::build_filename (vst2_info_cache_dir (), std::string (hash) + std::string ("-x64.v2i"));
 #else
 	return Glib::build_filename (vst2_info_cache_dir (), std::string (hash) + std::string ("-x86.v2i"));
@@ -603,7 +605,7 @@ ARDOUR::vst2_valid_cache_file (std::string const& path, bool verbose, bool* is_n
 	GStatBuf sb_v2i;
 
 	if (g_stat (path.c_str(), &sb_vst) == 0 && g_stat (cache_file.c_str (), &sb_v2i) == 0) {
-		if (sb_vst.st_mtime < sb_v2i.st_mtime) {
+		if (sb_vst.st_mtime <= sb_v2i.st_mtime) {
 			/* plugin is older than cache file */
 			if (verbose) {
 				PBD::info << "Cache file is up-to-date." << endmsg;

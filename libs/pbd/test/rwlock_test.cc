@@ -1,5 +1,6 @@
 #include <glib.h>
 #include <sched.h>
+#include "pbd/pthread_utils.h"
 #include "rwlock_test.h"
 
 using namespace PBD;

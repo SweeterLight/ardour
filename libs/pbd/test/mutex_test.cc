@@ -29,19 +29,32 @@ MutexTest::test_cond ()
 {
 	PBD::Mutex::Lock lm (_mutex);
 
-	CPPUNIT_ASSERT (!_cond.wait_for (_mutex, std::chrono::milliseconds (1000)));
+	/* Condition variables may wake spuriously, including on Windows. */
+	const auto deadline = std::chrono::steady_clock::now () + std::chrono::seconds (1);
+	while (std::chrono::steady_clock::now () < deadline) {
+		const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds> (
+			deadline - std::chrono::steady_clock::now ()) + std::chrono::milliseconds (1);
+		if (!_cond.wait_for (_mutex, remaining)) {
+			CPPUNIT_ASSERT (std::chrono::steady_clock::now () >= deadline);
+			break;
+		}
+	}
 
-	thread t1 ([&]() { _cond.signal (); });
-	_cond.wait (_mutex);
+	bool notified = false;
+	thread t1 ([&]() { PBD::Mutex::Lock lock (_mutex); notified = true; _cond.signal (); });
+	while (!notified) { _cond.wait (_mutex); }
 	CPPUNIT_ASSERT (lm.locked ()); // check that mutex is locked
 	CPPUNIT_ASSERT (!_mutex.trylock ()); // check that mutex is locked
 	t1.join();
 
-	thread t2 ([&]() { PBD::Mutex::Lock lm (_mutex); _cond.signal (); });
-	if (_cond.wait_for (_mutex, std::chrono::milliseconds (1000))) {
-		t2.join();
-	} else {
-		t2.detach();
-		CPPUNIT_ASSERT_MESSAGE ("_cond.wait_until failed", false);
+	notified = false;
+	thread t2 ([&]() { PBD::Mutex::Lock lock (_mutex); notified = true; _cond.signal (); });
+	const auto notify_deadline = std::chrono::steady_clock::now () + std::chrono::seconds (1);
+	while (!notified && std::chrono::steady_clock::now () < notify_deadline) {
+		_cond.wait_for (_mutex, std::chrono::milliseconds (10));
 	}
+	const bool received = notified;
+	lm.release ();
+	t2.join ();
+	CPPUNIT_ASSERT_MESSAGE ("condition notification was not received", received);
 }

@@ -501,7 +501,10 @@ def build(bld):
     avx512f_sources = []
 
     if not Options.options.no_fpu_optimization:
-        if (bld.env['build_target'] == 'i386' or bld.env['build_target'] == 'i686'):
+        if bld.env['WINDOWS_ARCH'] == 'arm64':
+            obj.source += ['aarch64_neon_functions.cc']
+            obj.defines += ['ARM_NEON_SUPPORT']
+        elif (bld.env['build_target'] == 'i386' or bld.env['build_target'] == 'i686'):
             obj.source += [ 'sse_functions_xmm.cc', 'sse_functions.s', ]
             avx_sources = [ 'sse_functions_avx_linux.cc' ]
             fma_sources = [ 'x86_functions_fma.cc' ]
