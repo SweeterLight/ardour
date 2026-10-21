@@ -100,8 +100,8 @@ def images(root):
 def require_features(root):
     required = {
         'GUI': 'bin/Ardour.exe',
-        'VST2 scanner': 'lib/ardour*/ardour-vst-scanner.exe',
-        'VST3 scanner': 'lib/ardour*/ardour-vst3-scanner.exe',
+        'VST2 scanner': 'bin/ardour-vst-scanner.exe',
+        'VST3 scanner': 'bin/ardour-vst3-scanner.exe',
         'PortAudio backend': 'lib/ardour*/backends/*portaudio*.dll',
         'JACK backend': 'lib/ardour*/backends/*jack*.dll',
         'dummy backend': 'lib/ardour*/backends/*dummy*.dll',
@@ -213,6 +213,11 @@ def bundle(stage, stack, runtime, work, output):
     for path in list(candidate.glob('lib/ardour*/*.dll')):
         shutil.copy2(path, bindir / path.name)
     for modules in candidate.glob('lib/ardour[0-9]*'):
+        for name in ('ardour-vst-scanner.exe', 'ardour-vst3-scanner.exe'):
+            scanner = modules / name
+            if not scanner.is_file():
+                raise ValueError(f'Required scanner missing: {scanner}')
+            shutil.copy2(scanner, bindir / name)
         for path in modules.glob('*win_in_gtk2.dll'):
             (modules / 'suil').mkdir(exist_ok=True)
             shutil.copy2(path, modules / 'suil' / path.name)

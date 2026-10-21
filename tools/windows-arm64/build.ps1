@@ -1,8 +1,10 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('All', 'Bootstrap', 'Dependencies', 'SourceDependencies', 'Configure', 'Build', 'Test', 'Package', 'Validate')]
+    [ValidateSet('All', 'Bootstrap', 'Dependencies', 'SourceDependencies', 'Configure', 'Build', 'Test', 'Package', 'Validate', 'Hardware')]
     [string]$Stage = 'All',
-    [ValidateRange(1, 64)][int]$Jobs = 2
+    [ValidateRange(1, 64)][int]$Jobs = 2,
+    [string]$HardwarePackage = '',
+    [switch]$ResumeHardwareCapture
 )
 
 $ErrorActionPreference = 'Stop'
@@ -112,6 +114,26 @@ if ($Stage -in @('All', 'Bootstrap')) {
 }
 if ($Stage -eq 'Bootstrap') { exit }
 if (!(Test-Path "$Msys\usr\bin\bash.exe")) { throw 'Run -Stage Bootstrap first.' }
+if ($Stage -eq 'Hardware') {
+    $Package = if ($HardwarePackage) { [IO.Path]::GetFullPath($HardwarePackage) } else {
+        Join-Path $Repo 'dist\Ardour-arm64'
+    }
+    if (!(Test-Path (Join-Path $Package 'bin\Ardour.exe'))) {
+        throw 'Run -Stage Package and -Stage Validate before hardware testing.'
+    }
+    $env:PATH = "$(Join-Path $Package 'bin');$Msys\clangarm64\bin;$env:SystemRoot\System32;$env:SystemRoot"
+    $Python = Join-Path $Msys 'clangarm64\bin\python.exe'
+    $ReportCopy = Join-Path $Repo 'dist\Ardour-arm64-hardware-validation.json'
+    $Arguments = '"' + (Join-Path $PSScriptRoot 'hardware_h2n.py') +
+        '" --package "' + $Package + '" --work "' + $Work +
+        '" --report-copy "' + $ReportCopy + '"'
+    if ($ResumeHardwareCapture) { $Arguments += ' --resume-capture' }
+    $HardwareProcess = Start-Process -FilePath $Python -ArgumentList $Arguments -NoNewWindow -Wait -PassThru
+    if ($HardwareProcess.ExitCode) {
+        throw "H2n hardware validation failed (exit $($HardwareProcess.ExitCode)); see $Work\hardware-h2n"
+    }
+    exit
+}
 if ($Stage -eq 'All') {
     foreach ($Name in @('Dependencies', 'Configure', 'Build', 'Test', 'Package', 'Validate')) {
         Invoke-BuildStage $Name

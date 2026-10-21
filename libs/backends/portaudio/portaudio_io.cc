@@ -25,6 +25,10 @@
 
 #include "portaudio_io.h"
 
+#ifdef PLATFORM_WINDOWS
+#include "pa_win_wasapi.h"
+#endif
+
 #ifdef WITH_ASIO
 #include "pa_asio.h"
 #endif
@@ -40,6 +44,58 @@
 
 using namespace PBD;
 using namespace ARDOUR;
+
+#ifdef PLATFORM_WINDOWS
+static void
+init_wasapi_exclusive (PaWasapiStreamInfo& info)
+{
+	memset (&info, 0, sizeof (info));
+	info.size = sizeof (info);
+	info.hostApiType = paWASAPI;
+	info.version = 1;
+	info.flags = paWinWasapiExclusive;
+}
+
+static bool
+try_wasapi_exclusive (PaStreamParameters* input, PaStreamParameters* output,
+                      double rate, PaWasapiStreamInfo& input_info,
+                      PaWasapiStreamInfo& output_info)
+{
+	if (Pa_IsFormatSupported (input, output, rate) == paFormatIsSupported) {
+		return false;
+	}
+	const PaStreamParameters* params[] = { input, output };
+	for (size_t i = 0; i < 2; ++i) {
+		if (!params[i]) {
+			continue;
+		}
+		const PaDeviceInfo* device = Pa_GetDeviceInfo (params[i]->device);
+		const PaHostApiInfo* host = device ? Pa_GetHostApiInfo (device->hostApi) : NULL;
+		if (!host || host->type != paWASAPI) {
+			return false;
+		}
+	}
+	init_wasapi_exclusive (input_info);
+	init_wasapi_exclusive (output_info);
+	if (input) {
+		input->hostApiSpecificStreamInfo = &input_info;
+	}
+	if (output) {
+		output->hostApiSpecificStreamInfo = &output_info;
+	}
+	if (Pa_IsFormatSupported (input, output, rate) == paFormatIsSupported) {
+		DEBUG_AUDIO ("PortAudio using WASAPI exclusive mode for requested sample rate.\n");
+		return true;
+	}
+	if (input) {
+		input->hostApiSpecificStreamInfo = NULL;
+	}
+	if (output) {
+		output->hostApiSpecificStreamInfo = NULL;
+	}
+	return false;
+}
+#endif
 
 PortAudioIO::PortAudioIO ()
 	: _capture_channels (0)
@@ -150,10 +206,19 @@ PortAudioIO::available_sample_rates(int device_id, std::vector<float>& sampleRat
 
 		for (std::vector<float>::const_iterator i = rates.begin(); i != rates.end();
 		     ++i) {
-			if (paFormatIsSupported ==
-			    Pa_IsFormatSupported(nfo->maxInputChannels > 0 ? &inputParam : NULL,
-			                         nfo->maxOutputChannels > 0 ? &outputParam : NULL,
-			                         *i)) {
+			PaStreamParameters* input = nfo->maxInputChannels > 0 ? &inputParam : NULL;
+			PaStreamParameters* output = nfo->maxOutputChannels > 0 ? &outputParam : NULL;
+			bool supported = paFormatIsSupported == Pa_IsFormatSupported (input, output, *i);
+#ifdef PLATFORM_WINDOWS
+			if (!supported) {
+				PaWasapiStreamInfo input_info;
+				PaWasapiStreamInfo output_info;
+				supported = try_wasapi_exclusive (input, output, *i, input_info, output_info);
+				inputParam.hostApiSpecificStreamInfo = NULL;
+				outputParam.hostApiSpecificStreamInfo = NULL;
+			}
+#endif
+			if (supported) {
 				sampleRates.push_back(*i);
 			}
 		}
@@ -323,7 +388,13 @@ PortAudioIO::input_device_list(std::map<int, std::string> &devices) const
 	for (std::map<int, paDevice*>::const_iterator i = _input_devices.begin ();
 	     i != _input_devices.end ();
 	     ++i) {
-		devices.insert (std::pair<int, std::string>(i->first, Glib::locale_to_utf8(i->second->name)));
+		// PaDeviceInfo::name is UTF-8 on Windows, for every host API.
+#ifdef PLATFORM_WINDOWS
+		const std::string name = i->second->name;
+#else
+		const std::string name = Glib::locale_to_utf8 (i->second->name);
+#endif
+		devices.insert (std::pair<int, std::string>(i->first, name));
 	}
 }
 
@@ -333,7 +404,13 @@ PortAudioIO::output_device_list(std::map<int, std::string> &devices) const
 	for (std::map<int, paDevice*>::const_iterator i = _output_devices.begin ();
 	     i != _output_devices.end ();
 	     ++i) {
-		devices.insert (std::pair<int, std::string>(i->first, Glib::locale_to_utf8(i->second->name)));
+		// PaDeviceInfo::name is UTF-8 on Windows, for every host API.
+#ifdef PLATFORM_WINDOWS
+		const std::string name = i->second->name;
+#else
+		const std::string name = Glib::locale_to_utf8 (i->second->name);
+#endif
+		devices.insert (std::pair<int, std::string>(i->first, name));
 	}
 }
 
@@ -810,6 +887,13 @@ PortAudioIO::open_callback_stream(int device_input,
 
 	DEBUG_AUDIO ("Open Callback Stream\n");
 
+#ifdef PLATFORM_WINDOWS
+	PaWasapiStreamInfo wasapi_input_info;
+	PaWasapiStreamInfo wasapi_output_info;
+	try_wasapi_exclusive (_capture_channels > 0 ? &inputParam : NULL,
+	                      _playback_channels > 0 ? &outputParam : NULL,
+	                      sample_rate, wasapi_input_info, wasapi_output_info);
+#endif
 	err = Pa_OpenStream(&_stream,
 	                    _capture_channels > 0 ? &inputParam : NULL,
 	                    _playback_channels > 0 ? &outputParam : NULL,
@@ -822,7 +906,7 @@ PortAudioIO::open_callback_stream(int device_input,
 	if (err != paNoError) {
 		DEBUG_AUDIO(string_compose("PortAudio failed to open stream %1\n",
 		                           Pa_GetErrorText(err)));
-		return paInternalError;
+		return (PaErrorCode)err;
 	}
 
 	if (!set_sample_rate_and_latency_from_stream()) {
@@ -850,6 +934,13 @@ PortAudioIO::open_blocking_stream(int device_input,
 
 	PaError err = paNoError;
 
+#ifdef PLATFORM_WINDOWS
+	PaWasapiStreamInfo wasapi_input_info;
+	PaWasapiStreamInfo wasapi_output_info;
+	try_wasapi_exclusive (_capture_channels > 0 ? &inputParam : NULL,
+	                      _playback_channels > 0 ? &outputParam : NULL,
+	                      sample_rate, wasapi_input_info, wasapi_output_info);
+#endif
 	err = Pa_OpenStream (
 			&_stream,
 			_capture_channels > 0 ? &inputParam: NULL,
