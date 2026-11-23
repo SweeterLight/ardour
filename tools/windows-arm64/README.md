@@ -80,10 +80,10 @@ DLL, and run `-Stage Hardware -HardwarePackage <test-copy-path>`. The report
 records the tested path. The default stage tests `dist\Ardour-arm64`.
 The H2n-tested copy in this workspace is `dist\Ardour-arm64-h2n-candidate`, with
 a separate `dist\Ardour-arm64-h2n-candidate.zip`; the original release ZIP is
-unchanged. The accompanying hardware report identifies the tested candidate
-and records the deferred latency and ASIO checks.
+unchanged. The accompanying hardware report identifies the tested candidate,
+the completed WASAPI checks, and the outstanding ASIO check.
 
-### H2n validation recorded on 2026-10-22
+### H2n validation recorded on 2026-10-22 and 2026-11-23
 
 The connected H2n's Windows input and output endpoint defaults were stereo
 44,100 Hz/16-bit PCM. Windows reported a 48 kHz float input mix, so the test
@@ -101,13 +101,43 @@ export was 44,100 Hz, stereo, 16-bit PCM and contained audio. The candidate
 package passed the required-feature audit with 18 features and 280 ARM64
 binaries; the packaging regression suite passed eight tests.
 
-The hardware report's overall status is **blocked**, not passed. The three
-loopback round-trip latency readings remain outstanding because the cable test
-was unavailable. No native ARM64 H2n ASIO driver was registered, so ASIO
-hardware operation remains untested. The detailed evidence is in
-`dist/Ardour-arm64-hardware-validation.json`; the candidate ZIP includes its
-updated `build-manifest.json`. Both generated files are local artifacts and are
-ignored by Git.
+At the end of the 2026-10-22 run, the hardware report's overall status was
+**blocked** because the loopback cable test was unavailable. The detailed
+evidence is in `dist/Ardour-arm64-hardware-validation.json`; the candidate ZIP
+includes its updated `build-manifest.json`. Both generated files are local
+artifacts and are ignored by Git.
+
+On 2026-11-23, using the same tested candidate binaries, both Windows H2n
+endpoint defaults were verified again as stereo 44,100 Hz/16-bit PCM. In an
+isolated empty Ardour session, PortAudio's Windows WASAPI driver used the H2n
+microphone and headphone endpoints at 44.1 kHz with a 1024-frame buffer. The
+user confirmed the physical 3.5 mm output-to-input cable, low levels, plug-in
+power off, and direct monitoring off before testing. The Latency Measurement
+Tool measured `system:playback_1` to `system:capture_1`:
+
+| Run | Round-trip samples | Round-trip milliseconds |
+| --- | ---: | ---: |
+| 1 | 2,125 | 48.186 |
+| 2 | 1,947 | 44.150 |
+| 3 | 1,957 | 44.376 |
+
+All three final results were accepted by Ardour without level, deviation, or
+polarity warnings. Run 2 initially showed an invalid transient result before
+settling to its accepted reading. The spread was 178 samples (4.036 ms), below
+the 1024-sample acceptance limit, so the latency repeatability check passed.
+Ardour displayed systemic corrections of -1,107, -1,285, and -1,275 samples;
+compensation settings were left unchanged. Detector acceptance does not replace
+a separate clipping analysis of a captured test WAV.
+
+Screenshots, a fresh endpoint/binary preflight, and
+`latency-results-2026-11-23.json` are saved under
+`.build/windows-arm64/hardware-h2n`. The hardware report beside the ZIP now
+marks WASAPI validation passed while retaining the earlier capture, stream,
+and GUI checks from 2026-10-22. No native ARM64 H2n ASIO driver was
+registered during the original audit, so ASIO hardware testing remains
+outstanding. The portable folders and ZIPs were not rewritten on 2026-11-23;
+their embedded manifests retain the original validation snapshot. Use the
+accompanying hardware report for the subsequent latency results.
 
 For a GUI-only backend correction, `-ResumeHardwareCapture` rechecks an existing
 44.1 kHz/16-bit WAV and reuses its passed two-minute stream when the H2n device
