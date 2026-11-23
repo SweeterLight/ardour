@@ -44,6 +44,13 @@ int Stateful::loading_state_version = 0;
 
 thread_local bool Stateful::_regenerate_xml_or_string_ids (false);
 
+#if defined (COMPILER_MINGW) || defined (COMPILER_MSVC)
+bool& Stateful::_regenerate_xml_or_string_ids_ref ()
+{
+	return _regenerate_xml_or_string_ids;
+}
+#endif
+
 Stateful::Stateful ()
 	: _extra_xml (nullptr)
 	, _instant_xml (nullptr)
@@ -421,12 +428,6 @@ Stateful::regenerate_xml_or_string_ids () const
 	} else {
 		return false;
 	}
-}
-
-void
-Stateful::set_regenerate_xml_and_string_ids_in_this_thread (bool yn)
-{
-	_regenerate_xml_or_string_ids = yn;
 }
 
 } // namespace PBD

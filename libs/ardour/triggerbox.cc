@@ -1482,7 +1482,9 @@ AudioTrigger::AudioData::append (Sample const * src, samplecnt_t cnt, uint32_t c
 	}
 	samplecnt_t to_copy = std::min (cnt, (capacity - _length));
 	memcpy (at (chan) + _length, src, cnt * sizeof (Sample));
-	_length += cnt;
+	if (chan == 0) {
+		_length += cnt;
+	}
 	return to_copy;
 }
 
@@ -5165,7 +5167,7 @@ TriggerBox::run (BufferSet& bufs, samplepos_t start_sample, samplepos_t end_samp
 				start_pos = loop_start + start_off;
 			}
 
-			samplecnt_t move = std::min ((samplecnt_t)nframes, loop_end - start_pos);
+			samplecnt_t move = std::min (remain, loop_end - start_pos);
 
 			run_cycle (bufs, start_pos, start_pos + move, speed, move);
 

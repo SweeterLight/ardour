@@ -742,6 +742,17 @@ MidiView::motion (GdkEventMotion* ev)
 {
 	if (!_editing_context.drags()->active() && !_entered_note && _editing_context.current_mouse_mode() == MouseDraw) {
 
+		if (midi_track()->key_enforcement_policy() & NoDraw) {
+			double x = ev->x;
+			double y = ev->y;
+			_note_group->canvas_to_item (x, y);
+			if (!midi_track()->key()->in_key (y_to_note (y))) {
+				remove_ghost_note ();
+				hide_verbose_cursor ();
+				return false;
+			}
+		}
+
 		if (_ghost_note) {
 			update_ghost_note (ev->x, ev->y, ev->state);
 		} else {
@@ -2740,7 +2751,6 @@ MidiView::clear_note_selection ()
 {
 	clear_selection_internal ();
 	end_note_splitting ();
-	unselect_self ();
 }
 
 void
@@ -3147,10 +3157,6 @@ MidiView::remove_from_selection (NoteBase* ev)
 	ev->hide_velocity ();
 
 	ghost_sync_selection (ev);
-
-	if (_selection.empty()) {
-		unselect_self ();
-	}
 }
 
 void
@@ -4283,7 +4289,9 @@ MidiView::_duplicate_notes (int times)
 		Temporal::Beats lno (_midi_region->source_beats_to_absolute_time (last_note_time + delta).beats());
 		if (lno > _midi_region->end_position().beats()) {
 			apply_note_diff (true, true);
-			_midi_region->playlist()->clear_owned_changes ();
+			if (_midi_region->playlist()) {
+				_midi_region->playlist()->clear_owned_changes ();
+			}
 			_midi_region->trim_end (timepos_t (lno));
 			_editing_context.add_command (new StatefulDiffCommand (_midi_region));
 			_editing_context.commit_reversible_command ();

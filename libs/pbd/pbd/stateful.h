@@ -73,15 +73,30 @@ class /*LIBPBD_API*/ Stateful {
 	LIBPBD_API void set_id (const std::string&);
 	LIBPBD_API void reset_id ();
 
-	/* RAII structure to manage thread-local ID regeneration.
-	 */
+	/* RAII structure to manage thread-local ID regeneration. */
 	struct ForceIDRegeneration {
+#if defined (COMPILER_MINGW) || defined (COMPILER_MSVC)
+		/* Due to Native TLS recently being added, errors come from
+		 * thread_local variables during external linkage.
+		 * See https://github.com/msys2/MINGW-packages/issues/29272 */
 		ForceIDRegeneration () {
-			set_regenerate_xml_and_string_ids_in_this_thread (true);
+			_old_val = _regenerate_xml_or_string_ids_ref ();
+			_regenerate_xml_or_string_ids_ref () = true;
 		}
 		~ForceIDRegeneration () {
-			set_regenerate_xml_and_string_ids_in_this_thread (false);
+			_regenerate_xml_or_string_ids_ref () = _old_val;
 		}
+#else
+		ForceIDRegeneration () {
+			_old_val = _regenerate_xml_or_string_ids;
+			_regenerate_xml_or_string_ids = true;
+		}
+		~ForceIDRegeneration () {
+			_regenerate_xml_or_string_ids = _old_val;
+		}
+#endif
+		private:
+			bool _old_val;
 	};
 
 	/* history management */
@@ -139,11 +154,12 @@ class /*LIBPBD_API*/ Stateful {
   private:
 	friend struct ForceIDRegeneration;
 	static thread_local bool _regenerate_xml_or_string_ids;
+#if defined (COMPILER_MINGW) || defined (COMPILER_MSVC)
+	static LIBPBD_API bool& _regenerate_xml_or_string_ids_ref ();
+#endif
 
 	PBD::ID           _id;
 	std::atomic<int> _stateful_frozen;
-
-	LIBPBD_API static void set_regenerate_xml_and_string_ids_in_this_thread (bool yn);
 };
 
 } // namespace PBD

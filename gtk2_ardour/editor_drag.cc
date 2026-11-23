@@ -788,19 +788,30 @@ RegionSlipContentsDrag::motion (GdkEvent* event, bool first_move)
 		for (auto & sd : draggables) {
 			sd->region ()->clear_changes ();
 			sd->drag_start (); // this allows the region to draw itself 'transparently' while we drag it
+			/* Prevent region property changes during drag
+			 * as ARDOUR:Session::butler_transport_work might slow down waveform update
+			 */
+			sd->region ()->suspend_property_changes ();
+			AudioRegionView* arv = dynamic_cast<AudioRegionView*> (sd);
+			if (Config->get_automation_follows_content() && arv) {
+				arv->set_envelope_shifting (true);
+			}
 		}
 
 	} else {
 		for (auto & sd : draggables) {
 			timecnt_t  slippage = adjusted_current_time (event, false).distance (last_pointer_time ());
 			sd->region()->move_start (slippage);
+			/* fake region property change to update waveforms while property changes are suspended */
+			RegionView* rv = static_cast<RegionView*> (sd);
+			rv->region_changed (ARDOUR::Properties::start);
 		}
 		show_verbose_cursor_time (_primary->region ()->start ());
 	}
 }
 
 void
-RegionSlipContentsDrag::finished (GdkEvent*, bool movement_occurred)
+RegionSlipContentsDrag::finished (GdkEvent* event, bool movement_occurred)
 {
 	if (!movement_occurred) {
 		aborted (movement_occurred);
@@ -810,14 +821,37 @@ RegionSlipContentsDrag::finished (GdkEvent*, bool movement_occurred)
 	for (auto & sd: draggables) {
 		editing_context.add_command (new StatefulDiffCommand (sd->region ()));
 		sd->drag_end ();
+		if (Config->get_automation_follows_content()) {
+			AudioRegionView* arv = dynamic_cast<AudioRegionView*> (sd);
+			std::shared_ptr<AudioRegion> ar = dynamic_pointer_cast<AudioRegion> (sd->region());
+			/* shift envelope & fx lines */
+			if (ar) {
+				ar->move_automation_to_new_start ();
+			}
+			if (arv) {
+				arv->set_envelope_shifting (false);
+			}
+		}
+		sd->region ()->resume_property_changes ();
+
 	}
 
 	editing_context.commit_reversible_command ();
 }
 
 void
-RegionSlipContentsDrag::aborted (bool)
+RegionSlipContentsDrag::aborted (bool movement_occured)
 {
+	if (movement_occured) {
+		for (auto & sd: draggables) {
+			AudioRegionView* arv = dynamic_cast<AudioRegionView*> (sd);
+			if (Config->get_automation_follows_content() && arv) {
+				arv->set_envelope_shifting (false);
+			}
+			sd->region ()->resume_property_changes ();
+		}
+	}
+
 	/* ToDo: revert to the original region properties */
 	editing_context.abort_reversible_command ();
 }
@@ -1898,7 +1932,7 @@ RegionMoveDrag::finished_copy (bool const changed_position, bool const changed_t
 
 	/* Ripple marks & ranges if appropriate */
 
-	if (_editor.should_ripple_all () && _primary->region ()->playlist ()) {
+	if (_editor.should_ripple_all () && primary_playlist) {
 		_editor.ripple_marks (primary_playlist, extent_min, extent_min.distance (extent_max));
 	}
 
@@ -2815,6 +2849,9 @@ TrimDrag::motion (GdkEvent* event, bool first_move)
 
 			if (arv) {
 				arv->temporarily_hide_envelope ();
+				if (_operation == StartTrim) {
+					arv->set_envelope_shifting (true);
+				}
 			}
 
 			if (insert_result.second) {
@@ -3030,6 +3067,11 @@ TrimDrag::finished (GdkEvent* event, bool movement_occurred)
 	}
 
 	for (auto const & dragging_view: _views) {
+		AudioRegionView* arv = dynamic_cast<AudioRegionView*> (dragging_view.view);
+		if (_operation == StartTrim && arv) {
+			arv->set_envelope_shifting (false);
+		}
+
 		dragging_view.view->region ()->resume_property_changes ();
 	}
 }
@@ -3051,6 +3093,10 @@ TrimDrag::aborted (bool movement_occurred)
 	}
 
 	for (list<DraggingView>::const_iterator i = _views.begin (); i != _views.end (); ++i) {
+		AudioRegionView* arv = dynamic_cast<AudioRegionView*> (i->view);
+		if (_operation == StartTrim && arv) {
+			arv->set_envelope_shifting (false);
+		}
 		i->view->region ()->resume_property_changes ();
 	}
 }

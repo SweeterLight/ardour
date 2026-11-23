@@ -631,6 +631,18 @@ public:
 		FLAC_24BIT
 	};
 
+	enum SessionSaveDisposition {
+		SaveSnapshot,
+		SaveSnapshotAndSwitch,
+		SavePending,
+		SaveTemplate,
+		SaveAsSession,
+		ArchiveWithAllSources,
+		ArchiveOnlyUsedAssets,
+	};
+
+	int save_state_full (std::string snapshot_name = "", SessionSaveDisposition sd = SaveSnapshot);
+
 	int archive_session (const std::string&, const std::string&,
 	                     ArchiveEncode compress_audio = FLAC_16BIT,
 	                     PBD::FileArchive::CompressionLevel compression_level = PBD::FileArchive::CompressGood,
@@ -1630,7 +1642,7 @@ private:
 	    -1 if there is a pending declick fade-out,
 	    0 if there is no pending declick.
 	*/
-	bool maybe_stop (samplepos_t limit);
+	bool maybe_stop (samplepos_t limit, pframes_t n_samples);
 	bool maybe_sync_start (pframes_t &);
 
 	PBD::UUID               _uuid;
@@ -2207,14 +2219,10 @@ private:
 		SwitchToSnapshot
 	};
 
-	XMLNode& state (bool save_template,
-	                snapshot_t snapshot_type = NormalSave,
-	                bool for_archive = false,
-	                bool only_used_assets = false) const;
+	XMLNode& state (SessionSaveDisposition, snapshot_t snapshot_type = NormalSave) const;
 
 	XMLNode& get_state () const;
 	int      set_state (const XMLNode& node, int version); // not idempotent
-	XMLNode& get_template ();
 
 	bool maybe_copy_midifile (snapshot_t, std::shared_ptr<Source> src, XMLNode*);
 

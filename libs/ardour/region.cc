@@ -1674,6 +1674,7 @@ Region::suspend_property_changes ()
 {
 	Stateful::suspend_property_changes ();
 	_last_length = _length;
+	_last_start = _start;
 }
 
 void

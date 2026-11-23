@@ -121,7 +121,10 @@ compiler_flags_dictionaries= {
         'strict' : '',
         'c99': '/TP',
         'attasm': '',
-        'avx': '',
+        'avx': '/arch:AVX2',
+        'avx512f': '/arch:AVX512',
+        # this is implied by AVX2 in MSVC
+        'fma': '/arch:AVX2',
         'neon': '',
         'pic': '',
         'c-anonymous-union': '',
@@ -553,7 +556,7 @@ int main() { return 0; }''',
             if re.search ('x86_64-w64', str(conf.env['CC'])) is not None:
                 conf.define ('FPU_AVX_FMA_SUPPORT', 1)
                 conf.define ('FPU_AVX512F_SUPPORT', 1)
-        elif conf.env['build_target'] == 'i386' or conf.env['build_target'] == 'i686' or conf.env['build_target'] == 'x86_64':
+        elif conf.env['build_target'] == 'i386' or conf.env['build_target'] == 'i686' or conf.env['build_target'] == 'x86_64' or conf.env['build_target'] == 'msvc':
             conf.check_cxx(fragment = "#include <immintrin.h>\nint main(void) { __m512 a; _mm512_abs_ps(a); _mm512_fmadd_ps(a, a, a); (void) _mm512_reduce_min_ps(a); (void)_mm512_reduce_max_ps(a); return 0; }\n",
                            features  = ['cxx'],
                            cxxflags  = [ conf.env['compiler_flags_dict']['avx512f'], conf.env['compiler_flags_dict']['fma'], conf.env['compiler_flags_dict']['avx'] ],
@@ -609,7 +612,6 @@ int main() { return 0; }''',
         # the compile-time presence of the macro _LP64 is used to
         # distinguish 32 and 64 bit assembler
         #
-
         if not (opt.arm64 or conf.env['build_target'] == 'armhf' and conf.env['build_target'] == 'aarch64'):
             compiler_flags.append ("-DARCH_X86")
 
@@ -653,6 +655,12 @@ int main() { return 0; }''',
                 compiler_flags.append(flags_dict['xsaveintrin'])
                 compiler_flags.append('-fno-inline-functions')
 
+        if (conf.env['build_target'] == 'msvc'):
+            if (re.search ("(x86_64|AMD64)", cpu) is not None):
+                # on Windows sse is supported by 64 bit platforms only
+                build_host_supports_sse = True
+
+
     # end of processor-specific section
 
     # optimization section
@@ -660,7 +668,7 @@ int main() { return 0; }''',
         if sys.platform == 'darwin':
             compiler_flags.append("-DBUILD_VECLIB_OPTIMIZATIONS")
             conf.env.append_value('LINKFLAGS_OSX', ['-framework', 'Accelerate'])
-        elif conf.env['build_target'] == 'i686' or conf.env['build_target'] == 'x86_64':
+        elif conf.env['build_target'] == 'i686' or conf.env['build_target'] == 'x86_64' or conf.env['build_target'] == 'msvc':
             compiler_flags.append ("-DBUILD_SSE_OPTIMIZATIONS")
         elif conf.env['build_target'] == 'mingw':
             # usability of the 64 bit windows assembler depends on the compiler target,
@@ -1233,12 +1241,25 @@ int main () { int x = SFC_RF64_AUTO_DOWNGRADE; return 0; }
         conf.env.append_value('CXXFLAGS', "-DHAVE_RF64_RIFF")
         conf.env.append_value('CFLAGS', "-DHAVE_RF64_RIFF")
 
+    if Options.options.dist_target in ('msvc', 'mingw'):
+        conf.env.append_value('CFLAGS', '-DPLATFORM_WINDOWS')
+        conf.env.append_value('CXXFLAGS', '-DPLATFORM_WINDOWS')
+        conf.env.append_value('CFLAGS', '-DWIN32_LEAN_AND_MEAN')
+        conf.env.append_value('CXXFLAGS', '-DWIN32_LEAN_AND_MEAN')
+        conf.define ('WINDOWS', 1)
+        conf.env.append_value('LIB', 'ws2_32')
+        conf.env.append_value('LIB', 'winmm')
+        # TODO this should only be necessary for a debug build
+        conf.env.append_value('LIB', 'dbghelp')
+        # work around GdkDrawable BitBlt performance issue on windows
+        # see http://gareus.org/wiki/ardour_windows_gdk_and_cairo
+        conf.env.append_value('CFLAGS', '-DUSE_CAIRO_IMAGE_SURFACE')
+        conf.env.append_value('CXXFLAGS', '-DUSE_CAIRO_IMAGE_SURFACE')
+
     if Options.options.dist_target == 'mingw':
         if conf.env['WINDOWS_ARCH'] != 'arm64':
             Options.options.no_fpu_optimization = False
-        conf.env.append_value('CFLAGS', '-DPLATFORM_WINDOWS')
         conf.env.append_value('CFLAGS', '-DCOMPILER_MINGW')
-        conf.env.append_value('CXXFLAGS', '-DPLATFORM_WINDOWS')
         conf.env.append_value('CXXFLAGS', '-DCOMPILER_MINGW')
         if conf.options.cxx17:
             conf.env.append_value('CFLAGS', '-D_USE_MATH_DEFINES')
@@ -1248,21 +1269,12 @@ int main () { int x = SFC_RF64_AUTO_DOWNGRADE; return 0; }
         conf.env.append_value('LIB', 'pthread')
         # needed for at least libsmf
         conf.check_cc(function_name='htonl', header_name='winsock2.h', lib='ws2_32')
-        conf.env.append_value('LIB', 'ws2_32')
-        conf.env.append_value('LIB', 'winmm')
         if Options.options.program_name.lower().startswith('mixbus'):
             conf.env.append_value('LIB', 'ole32')
             conf.env.append_value('LIB', 'uuid')
         # needed for mingw64 packages, not harmful on normal mingw build
         conf.env.append_value('LIB', 'intl')
-        # TODO this should only be necessary for a debug build
-        conf.env.append_value('LIB', 'dbghelp')
 
-        # work around GdkDrawable BitBlt performance issue on windows
-        # see http://gareus.org/wiki/ardour_windows_gdk_and_cairo
-        conf.env.append_value('CFLAGS', '-DUSE_CAIRO_IMAGE_SURFACE')
-        conf.env.append_value('CXXFLAGS', '-DUSE_CAIRO_IMAGE_SURFACE')
-        conf.define ('WINDOWS', 1)
 
         have_ptw_semaphore = conf.check_cc(fragment = '''
 #include <pthread.h>
@@ -1289,33 +1301,21 @@ int main () { return 0; }
         have_native_tls = conf.env['CC_NAME'] == 'clang' or '--enable-tls' in gcc_config
 
         if have_native_tls:
-            conf.env.append_value('CFLAGS', '-DMINGW_NATIVE_TLS')
-            conf.env.append_value('CXXFLAGS', '-DMINGW_NATIVE_TLS')
+            conf.define('MINGW_NATIVE_TLS')
 
     if Options.options.dist_target == 'msvc':
-        conf.env.append_value('CFLAGS', '-DPLATFORM_WINDOWS')
         conf.env.append_value('CFLAGS', '-DCOMPILER_MSVC')
-        conf.env.append_value('CXXFLAGS', '-DPLATFORM_WINDOWS')
         conf.env.append_value('CXXFLAGS', '-DCOMPILER_MSVC')
         conf.env.append_value('CFLAGS', '-D_USE_MATH_DEFINES')
         conf.env.append_value('CXXFLAGS', '-D_USE_MATH_DEFINES')
-        # work around GdkDrawable BitBlt performance issue on windows
-        # see http://gareus.org/wiki/ardour_windows_gdk_and_cairo
-        conf.env.append_value('CFLAGS', '-DUSE_CAIRO_IMAGE_SURFACE')
-        conf.env.append_value('CXXFLAGS', '-DUSE_CAIRO_IMAGE_SURFACE')
         if conf.env['DEBUG']:
             conf.env.append_value('LIB', 'pthreadVC3d')
         else:
             conf.env.append_value('LIB', 'pthreadVC3')
-        conf.env.append_value('LIB', 'Ws2_32')
         conf.env.append_value('LIB', 'Advapi32')
         conf.env.append_value('LIB', 'Shell32')
-        conf.env.append_value('LIB', 'Winmm')
-        conf.env.append_value('LIB', 'Dbghelp')
         conf.env.append_value('LIB', 'User32')
         conf.env.append_value('LIB', 'Kernel32')
-        # MORE STUFF PROBABLY NEEDED HERE
-        conf.define ('WINDOWS', 1)
 
     have_int128_support = conf.check_cc(fragment = '''
 int main () { __int128 x = 0; return 0; }
@@ -1577,6 +1577,7 @@ const char* const ardour_config_info = "\\n\\
     write_config_text('LV2 extensions',        conf.is_defined('LV2_EXTENDED'))
     write_config_text('LXVST support',         conf.is_defined('LXVST_SUPPORT'))
     write_config_text('Mac VST support',       conf.is_defined('MACVST_SUPPORT'))
+    write_config_text('MinGW Native TLS',      conf.is_defined('MINGW_NATIVE_TLS'))
     write_config_text('NI-Maschine',           opts.maschine)
     write_config_text('OGG',                   conf.is_defined('HAVE_OGG'))
     write_config_text('Phone home',            conf.is_defined('PHONE_HOME'))

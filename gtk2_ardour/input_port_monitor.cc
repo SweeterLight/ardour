@@ -235,7 +235,11 @@ InputPortMonitor::InputScope::InputScope (samplecnt_t rate, int l, int g, Orient
 	, _min_gauge (g)
 	, _orientation (o)
 {
-	_surface = Cairo::ImageSurface::create (Cairo::FORMAT_ARGB32, l, g);
+	if (o == Horizontal) {
+		_surface = Cairo::ImageSurface::create (Cairo::FORMAT_ARGB32, l, g);
+	} else {
+		_surface = Cairo::ImageSurface::create (Cairo::FORMAT_ARGB32, g, l);
+	}
 	use_image_surface (false); /* we already use a surface */
 
 	parameter_changed ("waveform-clip-level");
@@ -281,17 +285,12 @@ InputPortMonitor::InputScope::on_size_allocate (Gtk::Allocation& a)
 {
 	CairoWidget::on_size_allocate (a);
 
-	int w, h;
-	if (_orientation == Horizontal) {
-		w = 2 + _surface->get_width ();
-		h = 2 + _surface->get_height ();
-	} else {
-		w = 2 + _surface->get_height ();
-		h = 2 + _surface->get_width ();
-	}
+	int w = 2 + _surface->get_width ();
+	int h = 2 + _surface->get_height ();
 
 	if (a.get_width () != w || a.get_height () != h) {
 		_surface = Cairo::ImageSurface::create (Cairo::FORMAT_ARGB32, std::max (1, a.get_width () - 2), std::max (1, a.get_height () - 2));
+		clear ();
 	}
 }
 
@@ -334,7 +333,7 @@ InputPortMonitor::InputScope::update (CircularSampleBuffer& csb)
 		if (_orientation == Horizontal) {
 			cr->rectangle (_pos, 0, 1, g);
 		} else {
-			if (_pos-- == 0) {
+			if (_pos-- <= 0) {
 				_pos = l - 1;
 			}
 			cr->rectangle (0, _pos, g, 1);
@@ -426,10 +425,11 @@ InputPortMonitor::InputScope::render (Cairo::RefPtr<Cairo::Context> const& cr, c
 	Gtkmm2ext::set_source_rgb_a (cr, UIConfiguration::instance ().color ("zero line"), .7);
 	cr->stroke ();
 
+	cr->restore ();
 	/* black border - compare to FastMeter::horizontal_expose */
 	cr->set_line_width (2.0);
 	Gtkmm2ext::rounded_rectangle (cr, 0, 0, get_width (), get_height (), boxy_buttons () ? 0 : 2);
-	cr->set_source_rgb (0, 0, 0); // black
+	Gtkmm2ext::set_source_rgba (cr, UIConfiguration::instance ().color ("meter outline"));
 	cr->stroke ();
 }
 

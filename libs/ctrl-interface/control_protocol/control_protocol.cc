@@ -21,7 +21,6 @@
 
 #if defined COMPILER_MSVC && defined WAF_BUILD
 #define NOMINMAX
-#define _WINSOCKAPI_
 #endif
 
 #include "pbd/convert.h"
@@ -71,6 +70,7 @@ const std::string ControlProtocol::state_node_name ("Protocol");
 
 ControlProtocol::ControlProtocol (Session& s, string str)
 	: BasicUI (s)
+	, surface_callback (nullptr)
 	, _name (str)
 	, glib_event_callback (std::bind (&ControlProtocol::event_loop_precall, this))
 	, _active (false)

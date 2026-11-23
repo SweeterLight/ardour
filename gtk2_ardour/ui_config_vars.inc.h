@@ -61,6 +61,7 @@ UI_CONFIG_VARIABLE (bool, show_waveforms, "show-waveforms", true)
 UI_CONFIG_VARIABLE (bool, show_waveforms_while_recording, "show-waveforms-while-recording", true)
 UI_CONFIG_VARIABLE (ARDOUR::WaveformScale, waveform_scale, "waveform-scale", Logarithmic)
 UI_CONFIG_VARIABLE (ARDOUR::WaveformShape, waveform_shape, "waveform-shape", Traditional)
+UI_CONFIG_VARIABLE (bool, apply_envelope_to_waveforms, "apply-envelope-to-waveforms", false)
 UI_CONFIG_VARIABLE (bool, update_editor_during_summary_drag, "update-editor-during-summary-drag", true)
 UI_CONFIG_VARIABLE (bool, vsummary_uses_track_colors, "vertical-summary-uses-track-colors", true)
 UI_CONFIG_VARIABLE (bool, never_display_periodic_midi, "never-display-periodic-midi", true)
@@ -87,6 +88,11 @@ UI_CONFIG_VARIABLE (ARDOUR::ClockDeltaMode, primary_clock_delta_mode, "primary-c
 UI_CONFIG_VARIABLE (ARDOUR::ClockDeltaMode, secondary_clock_delta_mode, "secondary-clock-delta-mode", NoDelta)
 UI_CONFIG_VARIABLE (ARDOUR::samplecnt_t, clock_display_limit, "clock-display-limit", 359999) /* seconds; default 99h, 0 = unlimited */
 UI_CONFIG_VARIABLE (bool, show_track_meters, "show-track-meters", true)
+#ifdef __APPLE__
+UI_CONFIG_VARIABLE (bool, fastmeter_partial_exposure, "fastmeter-partial-exposure", false)
+#else
+UI_CONFIG_VARIABLE (bool, fastmeter_partial_exposure, "fastmeter-partial-exposure", true)
+#endif
 UI_CONFIG_VARIABLE (bool, follow_edits, "follow-edits", false)
 UI_CONFIG_VARIABLE (ARDOUR::TimeSelectionAfterSectionPaste, after_section_op, "after-section-op", ARDOUR::SectionSelectRetainAndMovePlayhead)
 UI_CONFIG_VARIABLE (bool, super_rapid_clock_update, "super-rapid-clock-update", false)
@@ -112,7 +118,6 @@ UI_CONFIG_VARIABLE (bool, show_secondary_clock, "show-secondary-clock", true)
 UI_CONFIG_VARIABLE (double, waveform_clip_level, "waveform-clip-level", -0.0933967) /* units of dB */
 UI_CONFIG_VARIABLE (bool, buggy_gradients, "buggy-gradients", false)
 UI_CONFIG_VARIABLE (bool, cairo_image_surface, "cairo-image-surface", false)
-UI_CONFIG_VARIABLE (ARDOUR::AppleNSGLViewMode, nsgl_view_mode, "nsgl-view-mode", NSGLHiRes)
 UI_CONFIG_VARIABLE (uint64_t, waveform_cache_size, "waveform-cache-size", 100) /* units of megagbytes */
 UI_CONFIG_VARIABLE (int32_t, recent_session_sort, "recent-session-sort", 0)
 UI_CONFIG_VARIABLE (bool, save_export_analysis_image, "save-export-analysis-image", false)

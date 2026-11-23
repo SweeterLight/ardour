@@ -515,7 +515,6 @@ Pianoroll::build_canvas ()
 	_canvas.MouseMotion.connect ([this](ArdourCanvas::Duple const & pos) { motion_track (pos); });
 	_canvas.set_background_color (UIConfiguration::instance().color ("arrange base"));
 	_canvas.signal_event().connect (sigc::mem_fun (*this, &Pianoroll::canvas_pre_event), false);
-	dynamic_cast<ArdourCanvas::GtkCanvas*>(&_canvas)->use_nsglview (UIConfiguration::instance().get_nsgl_view_mode () == NSGLHiRes);
 
 	_canvas.PreRender.connect (sigc::mem_fun(*this, &EditingContext::pre_render));
 
@@ -1251,6 +1250,7 @@ Pianoroll::button_press_handler_1 (ArdourCanvas::Item* item, GdkEvent* event, It
 			}
 			return true;
 		}
+		break;
 	case ClipStartItem: {
 		ArdourCanvas::Rectangle* r = dynamic_cast<ArdourCanvas::Rectangle*> (item);
 		if (r) {

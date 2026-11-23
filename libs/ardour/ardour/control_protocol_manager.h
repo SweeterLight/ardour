@@ -31,6 +31,7 @@
 #include "control_protocol/types.h"
 
 #include "ardour/session_handle.h"
+#include "ardour/types.h"
 
 namespace ARDOUR
 {
@@ -97,6 +98,10 @@ public:
 	void                                                            stripable_selection_changed (ARDOUR::StripableNotificationListPtr);
 	static PBD::Signal<void (ARDOUR::StripableNotificationListPtr)> StripableSelectionChanged;
 
+	void do_surface_callback (bool once_only, ARDOUR::SurfaceCallbackType type, void* arg = nullptr);
+	PBD::Signal<void()> SupportedSurfaceCallbackChange;
+	std::vector<ARDOUR::SurfaceCallbackType> supported_surface_callbacks () const;
+
 private:
 	ControlProtocolManager ();
 	static ControlProtocolManager* _instance;
@@ -104,6 +109,7 @@ private:
 	mutable PBD::RWLock             _protocols_lock;
 	std::list<ControlProtocol*>     _control_protocols;
 	std::list<ControlProtocolInfo*> _control_protocol_info;
+	std::vector<uint32_t>           _supported_surface_callbacks;
 
 	void session_going_away ();
 

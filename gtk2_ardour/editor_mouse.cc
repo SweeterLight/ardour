@@ -259,7 +259,12 @@ Editor::update_time_selection_display ()
 		/* Clear regions, but not time or tracks, since that
 		 * would destroy the range selection rectangle, which we need to stick
 		 * around for AutomationRangeDrag. */
-		selection->clear_regions ();
+		if (selection->regions.size () != 1 || selection->midi_regions ().size () != 1) {
+			/* Don't clear regions if there's only 1 midi region selected as we
+			 * might be switching mouse modes while working on a midi region
+			 */
+			selection->clear_regions ();
+		}
 		selection->clear_playlists ();
 		/* .. unless there is no track selection (i.e. arrangement section
 		 * selection). In which case time is cleared too.
@@ -272,7 +277,12 @@ Editor::update_time_selection_display ()
 		/* This handles internal edit.
 		   Clear everything except points and notes.
 		*/
-		selection->clear_regions();
+		if (selection->regions.size () != 1 || selection->midi_regions ().size () != 1) {
+			/* Don't clear regions if there's only 1 midi region selected as we
+			 * might be switching mouse modes while working on a midi region
+			 */
+			selection->clear_regions ();
+		}
 		selection->clear_lines();
 		selection->clear_playlists ();
 
@@ -442,7 +452,7 @@ Editor::button_selection (ArdourCanvas::Item* item, GdkEvent* event, ItemType it
 			break;
 
 		case GainLineItem:
-			if (eff_mouse_mode != MouseRange) {
+			if (eff_mouse_mode != MouseRange && eff_mouse_mode != MouseDraw) {
 				EditorAutomationLine* argl = reinterpret_cast<EditorAutomationLine*> (item->get_data ("line"));
 
 				std::list<Selectable*> selectables;
@@ -875,9 +885,9 @@ Editor::button_press_handler_1 (ArdourCanvas::Item* item, GdkEvent* event, ItemT
 
 			case RegionItem:
 				if (dynamic_cast<AutomationRegionView*> (clicked_regionview)) {
-					/* click on an automation region view; do nothing here and let the ARV's signal handler
-					   sort it out.
-					*/
+					/* behave in automation region view like in automation track */
+					_drags->set (new RubberbandSelectDrag (*this, item, [&](GdkEvent* ev, timepos_t const & pos) { return this->rb_click (ev, pos); }), event);
+					return true;
 					break;
 				}
 
@@ -1226,11 +1236,6 @@ Editor::button_press_handler_2 (ArdourCanvas::Item* item, GdkEvent* event, ItemT
 			return true;
 			break;
 
-		default:
-			break;
-		}
-
-		switch (item_type) {
 		case RegionViewNameHighlight:
 			_drags->set (new TrimDrag (*this, item, clicked_regionview, selection->regions.by_layer(), drag_time_domain (clicked_regionview->region())), event);
 			return true;
@@ -1247,6 +1252,10 @@ Editor::button_press_handler_2 (ArdourCanvas::Item* item, GdkEvent* event, ItemT
 			return true;
 			break;
 
+		case VelocityItem:
+			_drags->set (new LollipopDrag (*this, item), event);
+			return true;
+			
 		default:
 			break;
 		}

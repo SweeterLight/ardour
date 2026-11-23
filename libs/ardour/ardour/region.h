@@ -165,10 +165,11 @@ public:
 	timepos_t source_length (uint32_t n) const;
 	uint32_t   max_source_level () const;
 
-	/* these two are valid ONLY during a StateChanged signal handler */
+	/* these 3 are valid ONLY during a StateChanged signal handler */
 
 	timepos_t last_position () const { return _last_length.position(); }
 	timecnt_t last_length ()   const { return _last_length; }
+	timepos_t last_start ()    const { return _last_start; }
 
 	samplecnt_t ancestral_start_sample ()  const { return _ancestral_start.val().samples(); }
 	samplecnt_t ancestral_length_samples () const { return _ancestral_length.val().samples(); }
@@ -671,6 +672,7 @@ private:
 	PBD::Property<bool>        _contents; // type is irrelevant
 
 	timecnt_t             _last_length;
+	timepos_t             _last_start;
 	mutable RegionEditState _first_edit;
 	layer_t                 _layer;
 

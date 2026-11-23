@@ -2749,19 +2749,36 @@ Session::find_route_name (string const & base, uint32_t& id, string& name, bool 
 	}
 
 	/* compare to Route::set_name_sequence */
+#if defined(PLATFORM_WINDOWS) && defined(COMPILER_MINGW)
+	Glib::ustring base_ustring (base);
+	Glib::RefPtr<Glib::Regex> sequence_regex = Glib::Regex::create ("^(.*) (\\d+)\\.\\.(\\d+)$");
+	Glib::MatchInfo matches;
+	bool found = sequence_regex->match (base_ustring, matches);
+#else
 	std::regex sequence_regex ("^(.*) (\\d+)\\.\\.(\\d+)$");
 	std::smatch matches;
 	bool found = std::regex_search (base, matches, sequence_regex);
+#endif
 	bool numeric = true;
 
 	if (!found) {
+#if defined(PLATFORM_WINDOWS) && defined(COMPILER_MINGW)
+		Glib::RefPtr<Glib::Regex> sequence_regex = Glib::Regex::create ("^(.*) ([[:alpha:]])\\.\\.([[:alpha:]])$");
+		found = sequence_regex->match (base_ustring, matches);
+#else
 		std::regex sequence_regex ("^(.*) ([[:alpha:]])\\.\\.([[:alpha:]])$");
 		found = std::regex_search (base, matches, sequence_regex);
+#endif
 		numeric = false;
 	}
 
+#if defined(PLATFORM_WINDOWS) && defined(COMPILER_MINGW)
+	if (found && matches.matches() && matches.get_match_count() == 4) {
+		std::string start (matches.fetch(2));
+#else
 	if (found && !matches.empty() && matches.size() == 4) {
 		std::string start (matches[2]);
+#endif
 		for (uint32_t i = 1; i < id; ++i) {
 			if (numeric) {
 				start = ARDOUR::bump_name_number (start);
@@ -2770,7 +2787,11 @@ Session::find_route_name (string const & base, uint32_t& id, string& name, bool 
 			}
 		}
 		while (id < (UINT_MAX-1)) { // start <= end
+#if defined(PLATFORM_WINDOWS) && defined(COMPILER_MINGW)
+			name = string_compose ("%1 %2", std::string(matches.fetch(1)), start);
+#else
 			name = string_compose ("%1 %2", matches[1], start);
+#endif
 
 			if (route_by_name (name) == 0) {
 				return true;
@@ -8255,7 +8276,30 @@ Session::maybe_update_tempo_from_midiclock_tempo (float bpm)
 void
 Session::send_mclk_for_cycle (samplepos_t start_sample, samplepos_t end_sample, pframes_t n_samples, samplecnt_t pre_roll)
 {
-	midi_clock->tick (start_sample, end_sample, n_samples, pre_roll);
+	Location* loc = _locations->auto_loop_location ();
+
+	if (loc && get_play_loop () && n_samples > 0 && pre_roll == 0) {
+		const samplepos_t loop_start = loc->start_sample ();
+		const samplepos_t loop_end   = loc->end_sample ();
+		const samplecnt_t looplen    = loop_end - loop_start;
+
+		samplecnt_t remain = n_samples;
+		samplepos_t start  = start_sample;
+
+		while (remain > 0) {
+			if (start >= loop_end) {
+				sampleoffset_t start_off = (start - loop_start) % looplen;
+				start = loop_start + start_off;
+			}
+
+			samplecnt_t move = std::min<samplecnt_t> (remain, loop_end - start);
+			midi_clock->tick (start, start + move, move, 0);
+			remain -= move;
+			start  += move;
+		}
+	} else {
+		midi_clock->tick (start_sample, end_sample, n_samples, pre_roll);
+	}
 }
 
 void
